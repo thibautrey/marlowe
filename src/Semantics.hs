@@ -30,13 +30,13 @@ import qualified Data.Maybe as Maybe
  -- People are represented by their public keys,
  -- which in turn are given by integers.
 
-type Key         = Int   -- Public key
+type Key         = Integer   -- Public key
 type Person      = Key
 
 -- Block numbers and random numbers are both integers.
  
-type Random      = Int
-type BlockNumber = Int
+type Random      = Integer
+type BlockNumber = Integer
 
 -- Observables are things which are recorded on the blockchain.
 --  e.g. "a random choice", the value of GBP/BTC exchange rate, …
@@ -60,14 +60,17 @@ data OS =  OS { random       :: Random,
                 blockNumber  :: BlockNumber }
                     deriving (Eq,Ord,Show,Read)
 
+emptyOS :: OS
+emptyOS = OS { random = 0, blockNumber = 0 }
+
 -- Inputs
 -- Types for cash commits, money redeems, and choices.
 --
 -- A cash commitment is an integer (should be positive integer?)
 -- Concrete values are sometimes chosen too: these are integers for the sake of this model.
 
-type Cash     = Int
-type ConcreteChoice = Int
+type Cash     = Integer
+type ConcreteChoice = Integer
 
 -- We need to put timeouts on various operations. These could be some abstract time
 -- domain, but it only really makes sense for these to be block numbers.
@@ -79,13 +82,13 @@ type Timeout = BlockNumber
 -- be generated automatically (and so uniquely); here we simply assume that 
 -- they are unique.
 
-newtype IdentCC = IdentCC Int
+newtype IdentCC = IdentCC Integer
                deriving (Eq,Ord,Show,Read)
 
-newtype IdentChoice = IdentChoice Int
+newtype IdentChoice = IdentChoice Integer
                deriving (Eq,Ord,Show,Read)
 
-newtype IdentPay = IdentPay Int
+newtype IdentPay = IdentPay Integer
                deriving (Eq,Ord,Show,Read)
 
 -- A cash commitment is made by a person, for a particular amount and timeout.               
@@ -109,7 +112,7 @@ data RC = RC IdentCC Person Cash
 -- entry per identifier and person pair and would
 -- make access more efficient if we needed to find
 -- an entry without knowing the concrete choice
--- or ammount of cash being claimed.
+-- or amount of cash being claimed.
 
 -- If we want to be able to accept commitments that are
 -- more generous than established we would need to make
@@ -171,12 +174,15 @@ data State = State {
              }
                deriving (Eq,Ord,Show,Read)
 
+emptyState :: State
+emptyState = State {sc = Map.empty, sch = Map.empty}
+
 type CCStatus = (Person,CCRedeemStatus)
 data CCRedeemStatus = NotRedeemed Cash Timeout | ManuallyRedeemed
                deriving (Eq,Ord,Show,Read)
 
 -- Money is a set of contract primitives that represent constants,
--- functions, and variables that can be evaluated as an ammount
+-- functions, and variables that can be evaluated as an amount
 -- of money.
 
 data Money = AvailableMoney IdentCC |
@@ -212,7 +218,7 @@ data Observation =  BelowTimeout Timeout | -- are we still on time for something
                     NotObs Observation |
                     PersonChoseThis IdentChoice Person ConcreteChoice |
                     PersonChoseSomething IdentChoice Person |
-                    ValueGE Money Money | -- is first ammount is greater or equal than the second?
+                    ValueGE Money Money | -- is first amount is greater or equal than the second?
                     TrueObs | FalseObs
                     deriving (Eq,Ord,Show,Read)
 
@@ -266,7 +272,7 @@ step _ st Null _ = (st, Null, [])
 step inp st c@(Pay idpay from to val expi con) os
   | expired (blockNumber os) expi = (st, con, [ExpiredPay idpay from to cval])
   | right_claim =
-    if committed st from bn >= cval
+    if ((committed st from bn >= cval) && (cval >= 0))
       then (newstate, con, [SuccessfulPay idpay from to cval])
       else (st, con, [FailedPay idpay from to cval])
   | otherwise = (st, c, [])
@@ -340,9 +346,9 @@ step commits st c@(RedeemCC ident con) _ =
 -- Given a choice, if no previous choice for its id has been recorded,
 -- it records it in the map, and adds an action ChoiceMade to the list.
 
-addNewChoices :: (Map.Map (IdentChoice, Person) ConcreteChoice, [Action])
-                -> (IdentChoice, Person) -> ConcreteChoice
-                -> (Map.Map (IdentChoice, Person) ConcreteChoice, [Action])
+addNewChoices :: (Map.Map (IdentChoice, Person) ConcreteChoice, [Action])
+                -> (IdentChoice, Person) -> ConcreteChoice
+                -> (Map.Map (IdentChoice, Person) ConcreteChoice, [Action])
 
 addNewChoices acc@(recorded_choices, action_list) (choice_id, person) choice_int
   | Map.member (choice_id, person) recorded_choices = acc
@@ -351,12 +357,12 @@ addNewChoices acc@(recorded_choices, action_list) (choice_id, person) choice_int
 
 -- It records all the choices in the input that have not been recorded before
 
-recordChoices :: Input -> Map.Map (IdentChoice, Person) Int -> (Map.Map (IdentChoice, Person) Int, [Action])
+recordChoices :: Input -> Map.Map (IdentChoice, Person) Integer -> (Map.Map (IdentChoice, Person) Integer, [Action])
 
 recordChoices input recorded_choices = Map.foldlWithKey addNewChoices (recorded_choices, []) (ic input)
 
 -- Checks whether the provided cash commit is claimed in the input
-isClaimed :: Input -> IdentCC -> CCStatus -> Bool
+isClaimed :: Input -> IdentCC -> CCStatus -> Bool
 
 isClaimed inp ident status
   = case status of
@@ -366,7 +372,7 @@ isClaimed inp ident status
 -- Checks whether the provided cash commit is expired, not redeemed, and claimed.
 -- (That is, whether the conditions apply for marking it as redeemed even without RedeemCC.)
 
-expiredAndClaimed :: Input -> Timeout -> IdentCC -> CCStatus -> Bool
+expiredAndClaimed :: Input -> Timeout -> IdentCC -> CCStatus -> Bool
 
 expiredAndClaimed inp et k v = isExpiredNotRedeemed et v && isClaimed inp k v
 
@@ -488,9 +494,13 @@ sortByExpirationDate = List.sortBy lowerExpirationDateButNotExpired
 -- Compares two cash commitments regarding their expiration date,
 -- it considers a commitment smaller the closer it is to its
 -- expiration but without having expired.
+-- In case of draw we choose the one with the lowest id
 lowerExpirationDateButNotExpired :: (IdentCC, CCStatus) -> (IdentCC, CCStatus) -> Ordering
 
-lowerExpirationDateButNotExpired (_, (_, NotRedeemed _ e)) (_, (_, NotRedeemed _ e2)) = compare e e2
+lowerExpirationDateButNotExpired (IdentCC id1, (_, NotRedeemed _ e)) (IdentCC id2, (_, NotRedeemed _ e2)) =
+  case compare e e2 of
+    EQ -> compare id1 id2 
+    o -> o
 lowerExpirationDateButNotExpired (_, (_, NotRedeemed _ _)) _ = LT
 lowerExpirationDateButNotExpired _ (_, (_, NotRedeemed _ _)) = GT
 lowerExpirationDateButNotExpired _ _ = EQ
