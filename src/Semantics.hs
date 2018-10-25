@@ -536,3 +536,90 @@ inputStream commits = result
     commits_stream = repeat commits
     os_stream = map (OS 42) (concatMap (replicate 100) [1 ..])
 
+
+{----------------------------------
+ -- Check for unique identifiers --
+ ----------------------------------}
+
+
+data IdAcc = IdAcc (Set.Set IdentCC) (Set.Set (IdentPay, Person))
+
+emptyIdAcc :: IdAcc
+emptyIdAcc = IdAcc Set.empty Set.empty
+
+unionIdAcc :: IdAcc -> IdAcc -> IdAcc
+unionIdAcc acc1 acc2 =
+  case acc1 of {
+   IdAcc cc0 rp0 ->
+    case acc2 of {
+     IdAcc cc1 rp1 -> IdAcc (Set.union cc0 cc1) (Set.union rp0 rp1)}}
+
+areDisjointAccT :: IdAcc -> IdAcc -> Bool
+areDisjointAccT acc1 acc2 =
+  case acc1 of {
+   IdAcc cc0 rp0 ->
+    case acc2 of {
+     IdAcc cc1 rp1 -> (Set.null $ Set.intersection cc0 cc1) && (Set.null $ Set.intersection rp0 rp1)}}
+
+addCommitIDifNotThere :: IdentCC -> (Maybe IdAcc) -> Maybe IdAcc
+addCommitIDifNotThere ide acc =
+  case acc of {
+   Just i ->
+    case i of {
+     IdAcc cc0 rp0 ->
+      case Set.member ide cc0 of {
+       True -> Nothing;
+       False -> Just (IdAcc (Set.insert ide cc0) rp0)}};
+   Nothing -> Nothing}
+
+addPaymentIDifNotThere :: IdentPay -> Person -> (Maybe IdAcc) -> Maybe IdAcc
+addPaymentIDifNotThere ide per acc =
+  case acc of {
+   Just i ->
+    case i of {
+     IdAcc cc0 rp0 ->
+      case Set.member (ide, per) rp0 of {
+       True -> Nothing;
+       False -> Just (IdAcc cc0 (Set.insert (ide, per) rp0))}};
+   Nothing -> Nothing}
+
+combineDependent :: (Maybe IdAcc) -> (Maybe IdAcc) -> Maybe IdAcc
+combineDependent acc1 acc2 =
+  case acc1 of {
+   Just i ->
+    case acc2 of {
+     Just i0 ->
+      case areDisjointAccT i i0 of {
+       True -> Just (unionIdAcc i i0);
+       False -> Nothing};
+     Nothing -> Nothing};
+   Nothing -> Nothing}
+
+collectIdentifiersIfUnique :: Contract -> Maybe IdAcc
+collectIdentifiersIfUnique c =
+  case c of {
+   Null -> Just emptyIdAcc;
+   CommitCash identcc _ _ _ _ c1 c2 ->
+    addCommitIDifNotThere identcc
+      (combineDependent (collectIdentifiersIfUnique c1)
+        (collectIdentifiersIfUnique c2));
+   RedeemCC _ c0 -> collectIdentifiersIfUnique c0;
+   Pay identpay _ p2 _ _ c0 ->
+    addPaymentIDifNotThere identpay p2 (collectIdentifiersIfUnique c0);
+   Both c1 c2 ->
+    combineDependent (collectIdentifiersIfUnique c1)
+      (collectIdentifiersIfUnique c2);
+   Choice _ c1 c2 ->
+    combineDependent (collectIdentifiersIfUnique c1)
+      (collectIdentifiersIfUnique c2);
+   When _ _ c1 c2 ->
+    combineDependent (collectIdentifiersIfUnique c1)
+      (collectIdentifiersIfUnique c2)}
+
+areIdentifiersUnique :: Contract -> Bool
+areIdentifiersUnique c =
+  case collectIdentifiersIfUnique c of {
+   Just _ -> True;
+   Nothing -> False}
+
+
