@@ -178,7 +178,7 @@ emptyState :: State
 emptyState = State {sc = Map.empty, sch = Map.empty}
 
 type CCStatus = (Person,CCRedeemStatus)
-data CCRedeemStatus = NotRedeemed Cash Timeout | ManuallyRedeemed
+data CCRedeemStatus = NotRedeemed Cash Timeout | ManuallyRedeemed | ExpiredAndRedeemed
                deriving (Eq,Ord,Show,Read)
 
 -- Money is a set of contract primitives that represent constants,
@@ -326,18 +326,22 @@ step commits st c@(CommitCash ident person val start_timeout end_timeout con1 co
 -- Note: there is no possibility of payment failure here
 -- Also: look at partial redemption: currently it is all or nothing.
 
-step commits st c@(RedeemCC ident con) _ =
+step commits st c@(RedeemCC ident con) os =
     case Map.lookup ident ccs of
-      Just (person, NotRedeemed val _) ->
+      Just (person, NotRedeemed val ee) ->
         let newstate = st {sc = Map.insert ident (person, ManuallyRedeemed) ccs} in
-        if Set.member (RC ident person val) (rc commits)
-        then (newstate, con, [CommitRedeemed ident person val])
-        else (st, c, [])
+        if (expired bn ee) then (st, con, [])
+        else (if Set.member (RC ident person val) (rc commits)
+              then (newstate, con, [CommitRedeemed ident person val])
+              else (st, c, []))
       Just (person, ManuallyRedeemed) ->
         (st, con, [DuplicateRedeem ident person])
+      Just (person, ExpiredAndRedeemed) ->
+        (st, con, [])
       Nothing -> (st,c,[])
     where
         ccs = sc st
+        bn = blockNumber os
 
 -------------------------
 -- stepAll & stepBlock --
