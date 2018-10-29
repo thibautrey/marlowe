@@ -386,7 +386,7 @@ expiredAndClaimed inp et k v = isExpiredNotRedeemed et v && isClaimed inp k v
 
 markRedeemed :: CCStatus -> CCStatus
 
-markRedeemed (p, NotRedeemed _ _) = (p, ManuallyRedeemed)
+markRedeemed (p, NotRedeemed _ _) = (p, ExpiredAndRedeemed)
 markRedeemed (p, x) = (p, x)
 
 
