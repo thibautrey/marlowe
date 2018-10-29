@@ -148,7 +148,7 @@ emptyInput = Input Set.empty Set.empty Map.empty Map.empty
 data Action =   SuccessfulPay IdentPay Person Person Cash |
                 ExpiredPay IdentPay Person Person Cash |
                 FailedPay IdentPay Person Person Cash |
-                SuccessfulCommit IdentCC Person Cash |
+                SuccessfulCommit IdentCC Person Cash Timeout |
                 CommitRedeemed IdentCC Person Cash |
                 ExpiredCommitRedeemed IdentCC Person Cash |
                 DuplicateRedeem IdentCC Person |
@@ -314,7 +314,7 @@ step _ st (When obs expi con con2) os
 step commits st c@(CommitCash ident person val start_timeout end_timeout con1 con2) os
   | cexe || cexs = (st {sc = ust}, con2, [])
   | Set.member (CC ident person cval end_timeout) (cc commits)
-        = (st {sc = ust}, con1, [SuccessfulCommit ident person cval])
+        = (st {sc = ust}, con1, [SuccessfulCommit ident person cval end_timeout])
   | otherwise = (st, c, [])
   where ccs = sc st
         cexs = expired (blockNumber os) start_timeout
