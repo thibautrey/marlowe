@@ -456,13 +456,16 @@ execute =
      st <- get_state
      contr <- workspace_to_contract
      blk <- get_blocknum
-     let (nst, ncontr, outp) = stepBlock inp st contr (OS {random = 42, blockNumber = blk}) in do {set_output outp;
+     let (nst, ncontr, outp) = stepBlock inp st contr (OS {random = 42, blockNumber = blk}) in
+       if (areIdentifiersUnique contr) then
+                    (do {set_output outp;
                          code_to_contract ncontr;
                          set_state nst;
                          set_input_text "([], [], [], [])";
                          set_blocknum (blk + 1);
                          c2b;
-                         refreshActions}
+                         refreshActions})
+       else (alert "Badly formed contract: Identifiers are not unique!")
 
 deleteChildNodes :: String -> IO ()
 deleteChildNodes = F.ffi (J.pack "(function (x) { var node = document.getElementById(x); while (node.hasChildNodes()) { node.removeChild(node.lastChild); } })")
