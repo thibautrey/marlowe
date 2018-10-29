@@ -407,7 +407,7 @@ stepAllAux :: Input -> State -> Contract -> OS -> AS -> (State, Contract, AS)
 
 stepAllAux com st con os ac
   | (nst == st) && (ncon == con) && null nac = (st, con, ac)
-  | otherwise = stepAllAux com nst ncon os (nac ++ ac)
+  | otherwise = stepAllAux com nst ncon os (ac ++ nac)
   where
     (nst, ncon, nac) = step com st con os
 
