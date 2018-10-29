@@ -32,7 +32,7 @@ arbitraryObservationAux s
                  ,ValueGE <$> arbitraryMoneyAux (s - 1) <*> arbitraryMoneyAux (s - 1)
                  ,pure TrueObs,pure FalseObs]
  | s == 0 = oneof [BelowTimeout <$> arbitrary
-                  ,(PersonChoseThis . IdentChoice) <$> arbitrary <*> arbitrary <*>  arbitrary
+                  ,(PersonChoseThis . IdentChoice) <$> arbitrary <*> arbitrary <*> arbitrary
                   ,(PersonChoseSomething . IdentChoice) <$> arbitrary <*> arbitrary
                   ,pure TrueObs,pure FalseObs]
  | otherwise = error "Negative size in arbitraryObservation"
